@@ -23,6 +23,9 @@ INK_SECONDARY = "#52514e"
 MUTED = "#898781"
 GRID = "#e6e5e1"
 SERIES_1 = "#2a78d6"
+# Categorical slots in fixed order; a series keeps its slot by position in the sorted run list.
+CATEGORICAL = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100",
+               "#e87ba4", "#008300", "#4a3aa7", "#e34948"]
 
 
 def _style_axis(ax: plt.Axes, title: str, ylabel: str) -> None:
@@ -90,11 +93,72 @@ def plot_quant_sweep(data: dict, out: Path) -> Path:
     return out
 
 
+LOAD_PANELS = [
+    ("throughput_tps", "Aggregate throughput", "output tokens / sec"),
+    ("ttft_p95_s", "Time to first token (p95)", "seconds"),
+    ("latency_p95_s", "Request latency (p95)", "seconds"),
+]
+
+
+def plot_load(runs: list[dict], out: Path, title: str) -> Path:
+    """Three small multiples over concurrency, one line per benchmark run."""
+    if len(runs) > len(CATEGORICAL):
+        raise ValueError(f"At most {len(CATEGORICAL)} runs per chart; split into several charts")
+
+    fig, axes = plt.subplots(1, 3, figsize=(14, 4.3), facecolor=SURFACE)
+    for ax, (key, panel_title, ylabel) in zip(axes, LOAD_PANELS, strict=True):
+        for color, run in zip(CATEGORICAL, runs, strict=False):
+            levels = [lv for lv in run["levels"] if lv.get(key) is not None]
+            ax.plot([lv["concurrency"] for lv in levels], [lv[key] for lv in levels],
+                    color=color, linewidth=2, marker="o", markersize=6,
+                    markeredgecolor=SURFACE, markeredgewidth=1.5, label=run["label"])
+        _style_axis(ax, panel_title, ylabel)
+        ax.set_xscale("log", base=2)
+        concurrencies = sorted({lv["concurrency"] for r in runs for lv in r["levels"]})
+        ax.set_xticks(concurrencies, [str(c) for c in concurrencies])
+        ax.minorticks_off()
+        ax.set_xlabel("concurrent requests", color=INK_SECONDARY, fontsize=9)
+        ax.set_ylim(bottom=0)
+        ax.margins(y=0.15)
+
+    if len(runs) > 1:
+        fig.legend(*axes[0].get_legend_handles_labels(), loc="upper right", ncol=min(len(runs), 4),
+                   frameon=False, fontsize=9, labelcolor=INK_SECONDARY)
+    first = runs[0]
+    fig.suptitle(title, x=0.01, ha="left", fontsize=12, color=INK, fontweight="bold")
+    s = first["settings"]
+    fig.text(0.01, 0.01,
+             f"{s['num_prompts']} '{s['prompt_set']}' prompts per level · {s['max_tokens']} output "
+             f"tokens each (ignore_eos={s['ignore_eos']}) · temperature 0 · streaming",
+             fontsize=8, color=MUTED)
+    fig.tight_layout(rect=(0, 0.04, 1, 0.93))
+    out.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(out, dpi=150, facecolor=SURFACE)
+    plt.close(fig)
+    return out
+
+
+def load_runs(results_dir: Path) -> dict[str, list[dict]]:
+    """Group load-test result files by prompt set, each group sorted by label."""
+    groups: dict[str, list[dict]] = {}
+    for path in sorted(results_dir.glob("*.json")):
+        data = json.loads(path.read_text(encoding="utf-8"))
+        if data.get("experiment") == "load":
+            groups.setdefault(data["settings"]["prompt_set"], []).append(data)
+    return {k: sorted(v, key=lambda r: r["label"]) for k, v in groups.items()}
+
+
 def main() -> None:
     quant_file = RESULTS_DIR / "quant_sweep.json"
     if quant_file.exists():
         data = json.loads(quant_file.read_text(encoding="utf-8"))
         print(f"Wrote {plot_quant_sweep(data, DOCS_DIR / 'quant_sweep.png')}")
+
+    for prompt_set, runs in load_runs(RESULTS_DIR).items():
+        title = f"Load test: {prompt_set} prompts"
+        if len(runs) == 1:
+            title += f" · {runs[0]['label']}"
+        print(f"Wrote {plot_load(runs, DOCS_DIR / f'load_{prompt_set}.png', title)}")
 
 
 if __name__ == "__main__":

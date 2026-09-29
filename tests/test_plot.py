@@ -1,6 +1,32 @@
+import json
 from pathlib import Path
 
-from serve_llm.plot import plot_quant_sweep
+from serve_llm.plot import load_runs, plot_load, plot_quant_sweep
+
+
+def _load_run(label: str, prompt_set: str = "varied") -> dict:
+    levels = [{"concurrency": c, "throughput_tps": 10.0 * c, "ttft_p95_s": 0.2 * c,
+               "latency_p95_s": 12.0 + c} for c in (1, 2, 4)]
+    return {"experiment": "load", "label": label, "levels": levels,
+            "settings": {"prompt_set": prompt_set, "num_prompts": 40, "max_tokens": 256,
+                         "ignore_eos": True}}
+
+
+def test_plot_load_writes_png_for_several_runs(tmp_path: Path) -> None:
+    out = plot_load([_load_run("a"), _load_run("b")], tmp_path / "load.png", "Test")
+    assert out.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"
+
+
+def test_load_runs_groups_by_prompt_set_and_ignores_other_experiments(tmp_path: Path) -> None:
+    files = {"b.json": _load_run("b"), "a.json": _load_run("a"),
+             "s.json": _load_run("s", "shared_prefix"), "q.json": {"experiment": "quant_sweep"}}
+    for name, data in files.items():
+        (tmp_path / name).write_text(json.dumps(data), encoding="utf-8")
+
+    groups = load_runs(tmp_path)
+
+    assert set(groups) == {"varied", "shared_prefix"}
+    assert [r["label"] for r in groups["varied"]] == ["a", "b"]
 
 
 def test_plot_quant_sweep_writes_png(tmp_path: Path) -> None:

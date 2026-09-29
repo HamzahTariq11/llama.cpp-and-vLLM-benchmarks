@@ -48,5 +48,9 @@ extend-exclude = ["tools", "models"]
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
 
+[tool.ruff.lint.per-file-ignores]
+"bench/make_prompts.py" = ["E501"]  # prose data
+"bench/run_bench.py" = ["UP017"]    # runs in notebooks that may predate Python 3.11's datetime.UTC
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
