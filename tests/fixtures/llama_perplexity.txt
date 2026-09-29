@@ -1,0 +1,6 @@
+0.04.086.711 I perplexity: tokenizing the input ..
+0.05.300.319 I perplexity: tokenization took 1213.6 ms
+0.05.301.386 I perplexity: calculating perplexity over 2 chunks, n_ctx=512, batch_size=2048, n_seq=4
+0.31.188.679 I perplexity: 25.89 seconds per pass - ETA 0.20 minutes
+[1]6.4390,[2]9.1466,
+0.31.401.220 I Final estimate: PPL = 9.1466 +/- 1.20391

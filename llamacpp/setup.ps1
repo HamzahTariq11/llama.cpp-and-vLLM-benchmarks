@@ -46,4 +46,11 @@ if (-not (Test-Path (Join-Path $HfModelDir "config.json"))) {
     Write-Host "HF weights present: $HfModelDir"
 }
 
+# 4. Perplexity eval text: wikitext-2 test split, the same file llama.cpp's own scripts use.
+if (-not (Test-Path $WikitextFile)) {
+    Get-Zip "https://huggingface.co/datasets/ggml-org/ci/resolve/main/wikitext-2-raw-v1.zip" (Join-Path $ToolsDir "wikitext")
+} else {
+    Write-Host "wikitext-2 present: $WikitextFile"
+}
+
 Write-Host "Setup complete."
