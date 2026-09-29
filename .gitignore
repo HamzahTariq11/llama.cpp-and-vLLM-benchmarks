@@ -1,0 +1,17 @@
+# Large local artifacts
+models/
+tools/
+*.gguf
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+
+# Secrets / local config
+.env
+
+# Logs
+*.log
