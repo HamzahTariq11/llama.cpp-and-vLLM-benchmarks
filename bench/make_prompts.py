@@ -104,7 +104,7 @@ LONG = [
     f"Write a critical review of the decision-making described below, noting any missing information.\n\n{PASSAGES[0]}",
 ]
 
-# ~1.8k-token shared system document for the prefix-caching test (fictional organization).
+# ~1.45k-token shared system document (1,470-1,482 prompt tokens per request with the question) for the prefix-caching test (fictional organization).
 HANDBOOK = """You are the help assistant for the Harbor Lane Tool Library, a volunteer-run lending library for tools and equipment. Answer member questions using only the handbook below. If the handbook does not cover a question, say so and suggest contacting a volunteer coordinator. Keep answers short and friendly.
 
 HARBOR LANE TOOL LIBRARY - MEMBER HANDBOOK

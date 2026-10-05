@@ -179,17 +179,32 @@ def plot_attention(data: dict, out: Path) -> Path:
 LOAD_TITLES = {
     "load_baseline": "llama.cpp under concurrent load (laptop CPU)",
     "load_parallel_slots": "llama.cpp: 1 vs 4 parallel slots under concurrent load",
+    "load_vllm": "vLLM on a Tesla T4: FP16 vs AWQ 4-bit",
+    "load_prefix_caching": "vLLM prefix caching: 48 requests sharing a ~1.45k-token system prompt",
+    "head_to_head": "Laptop CPU (llama.cpp, Q5_K_M) vs Tesla T4 (vLLM), same prompts",
 }
 
+# Combined charts built from runs of other experiments (all share one prompt setup).
+COMBINED = {"head_to_head": ("load_baseline", "load_vllm")}
 
-def plot_load(runs: list[dict], out: Path, title: str) -> Path:
+
+def label_colors(labels: list[str]) -> dict[str, str]:
+    """Fixed categorical slot per run label, so a run has the same color on every chart."""
+    unique = sorted(set(labels))
+    if len(unique) > len(CATEGORICAL):
+        raise ValueError(f"{len(unique)} runs exceed the {len(CATEGORICAL)} categorical colors")
+    return dict(zip(unique, CATEGORICAL, strict=False))
+
+
+def plot_load(runs: list[dict], out: Path, title: str,
+              colors: dict[str, str] | None = None) -> Path:
     """Three small multiples over concurrency, one line per benchmark run."""
-    if len(runs) > len(CATEGORICAL):
-        raise ValueError(f"At most {len(CATEGORICAL)} runs per chart; split into several charts")
+    colors = colors or label_colors([r["label"] for r in runs])
 
     fig, axes = plt.subplots(1, 3, figsize=(14, 4.3), facecolor=SURFACE)
     for ax, (key, panel_title, ylabel) in zip(axes, LOAD_PANELS, strict=True):
-        for color, run in zip(CATEGORICAL, runs, strict=False):
+        for run in runs:
+            color = colors[run["label"]]
             levels = [lv for lv in run["levels"] if lv.get(key) is not None]
             ax.plot([lv["concurrency"] for lv in levels], [lv[key] for lv in levels],
                     color=color, linewidth=2, marker="o", markersize=6,
@@ -246,11 +261,17 @@ def main() -> None:
             data = json.loads(path.read_text(encoding="utf-8"))
             print(f"Wrote {plotter(data, DOCS_DIR / f'{name}.png')}")
 
-    for experiment, runs in load_runs(RESULTS_DIR).items():
+    groups = load_runs(RESULTS_DIR)
+    colors = label_colors([run["label"] for runs in groups.values() for run in runs])
+    for name, sources in COMBINED.items():
+        if all(s in groups for s in sources):
+            groups[name] = [run for s in sources for run in groups[s]]
+
+    for experiment, runs in groups.items():
         title = LOAD_TITLES.get(experiment, experiment)
         if len(runs) == 1:
             title += f" · {runs[0]['label']}"
-        print(f"Wrote {plot_load(runs, DOCS_DIR / f'{experiment}.png', title)}")
+        print(f"Wrote {plot_load(runs, DOCS_DIR / f'{experiment}.png', title, colors)}")
 
 
 if __name__ == "__main__":

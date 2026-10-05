@@ -3,7 +3,14 @@ from pathlib import Path
 
 import pytest
 
-from serve_llm.plot import load_runs, plot_attention, plot_load, plot_quant_sweep, plot_threads
+from serve_llm.plot import (
+    label_colors,
+    load_runs,
+    plot_attention,
+    plot_load,
+    plot_quant_sweep,
+    plot_threads,
+)
 
 
 def _load_run(label: str, experiment: str = "load_x", num_prompts: int = 40) -> dict:
@@ -32,6 +39,11 @@ def test_load_runs_groups_by_experiment_and_ignores_others(tmp_path: Path) -> No
 
     assert set(groups) == {"load_x", "load_y"}
     assert [r["label"] for r in groups["load_x"]] == ["a", "b"]
+
+
+def test_label_colors_are_stable_regardless_of_input_order() -> None:
+    assert label_colors(["b", "a", "c"]) == label_colors(["c", "a", "b", "a"])
+    assert label_colors(["a", "b"])["a"] != label_colors(["a", "b"])["b"]
 
 
 def test_load_runs_rejects_mixed_prompt_setups_in_one_chart(tmp_path: Path) -> None:
