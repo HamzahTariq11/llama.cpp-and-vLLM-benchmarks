@@ -1,0 +1,29 @@
+{
+  "description": "Q5_K_M llama-bench, 4 threads, pp256/tg64, 3 reps; run between steps",
+  "checks": [
+    {
+      "after": "start",
+      "time": "2026-09-30T06:39:46+00:00",
+      "pp_tps": 226.124694,
+      "pp_tps_std": 3.503018,
+      "tg_tps": 19.419182,
+      "tg_tps_std": 0.106631
+    },
+    {
+      "after": "quant",
+      "time": "2026-09-30T06:54:10+00:00",
+      "pp_tps": 172.339399,
+      "pp_tps_std": 7.314331,
+      "tg_tps": 15.883241,
+      "tg_tps_std": 2.364157
+    },
+    {
+      "after": "threads",
+      "time": "2026-09-30T06:56:07+00:00",
+      "pp_tps": 174.966556,
+      "pp_tps_std": 0.421574,
+      "tg_tps": 19.354024,
+      "tg_tps_std": 0.082731
+    }
+  ]
+}

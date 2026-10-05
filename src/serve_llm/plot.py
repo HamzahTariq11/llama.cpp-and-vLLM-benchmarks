@@ -100,6 +100,88 @@ LOAD_PANELS = [
 ]
 
 
+def _runtime_footer(fig: plt.Figure, data: dict, extra: str = "") -> None:
+    s = data["settings"]
+    fig.text(0.01, 0.01,
+             f"{data['model']} {data['quant']} · llama.cpp {data['llama_cpp']} · prompt: "
+             f"{s['pp_tokens']} tokens · generation: {s['tg_tokens']} tokens · mean ± sd of "
+             f"{s['reps']} reps{extra}",
+             fontsize=8, color=MUTED)
+
+
+def _save(fig: plt.Figure, out: Path, top: float = 0.9) -> Path:
+    fig.tight_layout(rect=(0, 0.04, 1, top))
+    out.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(out, dpi=150, facecolor=SURFACE)
+    plt.close(fig)
+    return out
+
+
+def plot_threads(data: dict, out: Path) -> Path:
+    """Two panels over thread count: prompt processing and generation speed."""
+    fig, axes = plt.subplots(1, 2, figsize=(11, 4), facecolor=SURFACE)
+    for ax, kind, title in zip(axes, ("prompt", "generation"),
+                               ("Prompt processing", "Generation"), strict=True):
+        rows = sorted((r for r in data["rows"] if r["kind"] == kind), key=lambda r: r["threads"])
+        _bar_panel(ax, [str(r["threads"]) for r in rows], [r["tps"] for r in rows], "{:.1f}",
+                   errors=[r["tps_std"] for r in rows])
+        _style_axis(ax, title, "tokens / sec")
+        ax.set_xlabel("threads", color=INK_SECONDARY, fontsize=9)
+    fig.suptitle(f"Thread count on {data['hardware']['cpu']}", x=0.01, ha="left",
+                 fontsize=12, color=INK, fontweight="bold")
+    _runtime_footer(fig, data)
+    return _save(fig, out, top=0.92)
+
+
+def plot_attention(data: dict, out: Path) -> Path:
+    """Grouped bars: speed per attention config at empty vs filled context, plus KV memory."""
+    rows = data["rows"]
+    configs = list(dict.fromkeys(r["config"] for r in rows))  # keep run order
+    depths = sorted({r["depth"] for r in rows})
+    colors = dict(zip(configs, CATEGORICAL, strict=False))
+    width = 0.8 / len(configs)
+
+    fig, axes = plt.subplots(1, 3, figsize=(14, 4.3), facecolor=SURFACE,
+                             gridspec_kw={"width_ratios": [2, 2, 1.3]})
+    for ax, kind, title in zip(axes[:2], ("prompt", "generation"),
+                               ("Prompt processing", "Generation"), strict=True):
+        for i, cfg in enumerate(configs):
+            by_depth = {r["depth"]: r for r in rows if r["kind"] == kind and r["config"] == cfg}
+            xs = [d_i + (i - (len(configs) - 1) / 2) * width for d_i in range(len(depths))]
+            vals = [by_depth[d]["tps"] for d in depths]
+            bars = ax.bar(xs, vals, width=width * 0.92, color=colors[cfg], label=cfg,
+                          yerr=[by_depth[d]["tps_std"] for d in depths],
+                          error_kw={"ecolor": INK_SECONDARY, "elinewidth": 1, "capsize": 2})
+            ax.bar_label(bars, labels=[f"{v:.1f}" for v in vals], padding=3, fontsize=7.5,
+                         color=INK_SECONDARY)
+        ax.set_xticks(range(len(depths)),
+                      ["empty context" if d == 0 else f"{d}-token context" for d in depths])
+        _style_axis(ax, title, "tokens / sec")
+        ax.margins(y=0.15)
+
+    kv = {r["config"]: r["kv_cache_mib"] for r in rows}
+    bars = axes[2].bar(configs, [kv[c] for c in configs], width=0.6,
+                       color=[colors[c] for c in configs])
+    axes[2].bar_label(bars, labels=[f"{kv[c]:.1f}" for c in configs], padding=3, fontsize=8,
+                      color=INK_SECONDARY)
+    axes[2].set_xticks(range(len(configs)), [c.replace(" · ", "\n") for c in configs])
+    _style_axis(axes[2], f"KV cache at {data['settings']['kv_ctx']} ctx", "MiB")
+    axes[2].margins(y=0.15)
+
+    fig.legend(*axes[0].get_legend_handles_labels(), loc="upper right", ncol=len(configs),
+               frameon=False, fontsize=9, labelcolor=INK_SECONDARY)
+    fig.suptitle("Flash attention and KV-cache quantization", x=0.01, ha="left",
+                 fontsize=12, color=INK, fontweight="bold")
+    _runtime_footer(fig, data, f" · {data['settings']['threads']} threads")
+    return _save(fig, out)
+
+
+LOAD_TITLES = {
+    "load_baseline": "llama.cpp under concurrent load (laptop CPU)",
+    "load_parallel_slots": "llama.cpp: 1 vs 4 parallel slots under concurrent load",
+}
+
+
 def plot_load(runs: list[dict], out: Path, title: str) -> Path:
     """Three small multiples over concurrency, one line per benchmark run."""
     if len(runs) > len(CATEGORICAL):
@@ -139,12 +221,16 @@ def plot_load(runs: list[dict], out: Path, title: str) -> Path:
 
 
 def load_runs(results_dir: Path) -> dict[str, list[dict]]:
-    """Group load-test result files by prompt set, each group sorted by label."""
+    """Group load-test result files (experiment "load*") by experiment, sorted by label."""
     groups: dict[str, list[dict]] = {}
     for path in sorted(results_dir.glob("*.json")):
         data = json.loads(path.read_text(encoding="utf-8"))
-        if data.get("experiment") == "load":
-            groups.setdefault(data["settings"]["prompt_set"], []).append(data)
+        if str(data.get("experiment", "")).startswith("load"):
+            groups.setdefault(data["experiment"], []).append(data)
+    for experiment, runs in groups.items():
+        prompt_setups = {(r["settings"]["prompt_set"], r["settings"]["num_prompts"]) for r in runs}
+        if len(prompt_setups) > 1:
+            raise ValueError(f"{experiment}: runs use different prompt setups {prompt_setups}")
     return {k: sorted(v, key=lambda r: r["label"]) for k, v in groups.items()}
 
 
@@ -154,11 +240,17 @@ def main() -> None:
         data = json.loads(quant_file.read_text(encoding="utf-8"))
         print(f"Wrote {plot_quant_sweep(data, DOCS_DIR / 'quant_sweep.png')}")
 
-    for prompt_set, runs in load_runs(RESULTS_DIR).items():
-        title = f"Load test: {prompt_set} prompts"
+    for name, plotter in (("runtime_threads", plot_threads), ("runtime_attention", plot_attention)):
+        path = RESULTS_DIR / f"{name}.json"
+        if path.exists():
+            data = json.loads(path.read_text(encoding="utf-8"))
+            print(f"Wrote {plotter(data, DOCS_DIR / f'{name}.png')}")
+
+    for experiment, runs in load_runs(RESULTS_DIR).items():
+        title = LOAD_TITLES.get(experiment, experiment)
         if len(runs) == 1:
             title += f" · {runs[0]['label']}"
-        print(f"Wrote {plot_load(runs, DOCS_DIR / f'load_{prompt_set}.png', title)}")
+        print(f"Wrote {plot_load(runs, DOCS_DIR / f'{experiment}.png', title)}")
 
 
 if __name__ == "__main__":

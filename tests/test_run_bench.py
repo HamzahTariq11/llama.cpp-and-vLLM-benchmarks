@@ -65,6 +65,14 @@ def test_load_prompts_attaches_shared_system_prompt() -> None:
     assert shared[0]["messages"][0]["role"] == "system"
 
 
+def test_load_prompts_repeat_makes_distinct_ids() -> None:
+    items = rb.load_prompts(BENCH / "prompts.jsonl", "shared_prefix", limit=2, repeat=3)
+
+    assert len(items) == 6
+    assert len({it["id"] for it in items}) == 6
+    assert items[0]["id"].endswith("#1") and items[-1]["id"].endswith("#3")
+
+
 def test_bust_cache_tags_user_message_only() -> None:
     messages = [{"role": "system", "content": "shared"}, {"role": "user", "content": "q"}]
     first, second = rb.bust_cache(messages), rb.bust_cache(messages)

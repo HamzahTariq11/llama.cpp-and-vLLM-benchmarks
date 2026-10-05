@@ -1,0 +1,141 @@
+{
+  "experiment": "runtime_threads",
+  "model": "qwen2.5-1.5b-instruct",
+  "quant": "Q5_K_M",
+  "created": "2026-09-30T06:55:50+00:00",
+  "hardware": {
+    "cpu": "11th Gen Intel(R) Core(TM) i5-1135G7 @ 2.40GHz",
+    "os": "Windows-11-10.0.22631-SP0"
+  },
+  "llama_cpp": "b11254 (8019dc563)",
+  "settings": {
+    "pp_tokens": 256,
+    "tg_tokens": 64,
+    "reps": 3,
+    "threads": 4,
+    "depth": 2048,
+    "kv_ctx": 4096
+  },
+  "rows": [
+    {
+      "test": "pp256",
+      "kind": "prompt",
+      "threads": 1,
+      "flash_attn": -1,
+      "type_k": "f16",
+      "type_v": "f16",
+      "depth": 0,
+      "tps": 71.582057,
+      "tps_std": 1.431771,
+      "config": "1 threads"
+    },
+    {
+      "test": "tg64",
+      "kind": "generation",
+      "threads": 1,
+      "flash_attn": -1,
+      "type_k": "f16",
+      "type_v": "f16",
+      "depth": 0,
+      "tps": 11.565579,
+      "tps_std": 0.20679,
+      "config": "1 threads"
+    },
+    {
+      "test": "pp256",
+      "kind": "prompt",
+      "threads": 2,
+      "flash_attn": -1,
+      "type_k": "f16",
+      "type_v": "f16",
+      "depth": 0,
+      "tps": 125.834744,
+      "tps_std": 1.675373,
+      "config": "2 threads"
+    },
+    {
+      "test": "tg64",
+      "kind": "generation",
+      "threads": 2,
+      "flash_attn": -1,
+      "type_k": "f16",
+      "type_v": "f16",
+      "depth": 0,
+      "tps": 16.80236,
+      "tps_std": 0.089998,
+      "config": "2 threads"
+    },
+    {
+      "test": "pp256",
+      "kind": "prompt",
+      "threads": 4,
+      "flash_attn": -1,
+      "type_k": "f16",
+      "type_v": "f16",
+      "depth": 0,
+      "tps": 171.125005,
+      "tps_std": 0.954084,
+      "config": "4 threads"
+    },
+    {
+      "test": "tg64",
+      "kind": "generation",
+      "threads": 4,
+      "flash_attn": -1,
+      "type_k": "f16",
+      "type_v": "f16",
+      "depth": 0,
+      "tps": 19.250797,
+      "tps_std": 0.089519,
+      "config": "4 threads"
+    },
+    {
+      "test": "pp256",
+      "kind": "prompt",
+      "threads": 6,
+      "flash_attn": -1,
+      "type_k": "f16",
+      "type_v": "f16",
+      "depth": 0,
+      "tps": 182.596719,
+      "tps_std": 0.375527,
+      "config": "6 threads"
+    },
+    {
+      "test": "tg64",
+      "kind": "generation",
+      "threads": 6,
+      "flash_attn": -1,
+      "type_k": "f16",
+      "type_v": "f16",
+      "depth": 0,
+      "tps": 19.475641,
+      "tps_std": 0.025223,
+      "config": "6 threads"
+    },
+    {
+      "test": "pp256",
+      "kind": "prompt",
+      "threads": 8,
+      "flash_attn": -1,
+      "type_k": "f16",
+      "type_v": "f16",
+      "depth": 0,
+      "tps": 175.380927,
+      "tps_std": 1.634025,
+      "config": "8 threads"
+    },
+    {
+      "test": "tg64",
+      "kind": "generation",
+      "threads": 8,
+      "flash_attn": -1,
+      "type_k": "f16",
+      "type_v": "f16",
+      "depth": 0,
+      "tps": 19.433768,
+      "tps_std": 0.184827,
+      "config": "8 threads"
+    }
+  ]
+}

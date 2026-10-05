@@ -97,8 +97,12 @@ def summarize_level(concurrency: int, results: list[RequestResult], wall_s: floa
 # ---------------------------------------------------------------- prompts
 
 
-def load_prompts(path: Path, prompt_set: str, limit: int | None) -> list[dict]:
-    """Return [{id, messages}] for the chosen set. The shared-prefix set gets its system prompt."""
+def load_prompts(path: Path, prompt_set: str, limit: int | None, repeat: int = 1) -> list[dict]:
+    """Return [{id, messages}] for the chosen set. The shared-prefix set gets its system prompt.
+
+    `repeat` sends each prompt that many times (ids get a #n suffix); combined with the
+    cache-bust tag every copy is still a distinct request.
+    """
     records = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line]
     system = next((r["prompt"] for r in records if r["set"] == f"{prompt_set}_system"), None)
     items = []
@@ -110,7 +114,10 @@ def load_prompts(path: Path, prompt_set: str, limit: int | None) -> list[dict]:
         items.append({"id": r["id"], "messages": messages})
     if not items:
         raise SystemExit(f"No prompts in set '{prompt_set}' in {path}")
-    return items[:limit] if limit else items
+    items = items[:limit] if limit else items
+    if repeat > 1:
+        items = [{**it, "id": f"{it['id']}#{n}"} for n in range(1, repeat + 1) for it in items]
+    return items
 
 
 # ---------------------------------------------------------------- requests
@@ -275,11 +282,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--base-url", required=True, help="e.g. http://127.0.0.1:8080/v1")
     p.add_argument("--model", required=True, help="model name the server accepts")
     p.add_argument("--label", required=True, help="name for this run, e.g. llamacpp-q5_k_m")
+    p.add_argument("--experiment", default="load",
+                   help="groups runs that belong on one chart, e.g. load_parallel_slots")
     p.add_argument("--concurrency", default="1,2,4", help="comma-separated levels")
     p.add_argument("--max-tokens", type=int, default=256)
     p.add_argument("--prompts", type=Path, default=DEFAULT_PROMPTS)
     p.add_argument("--prompt-set", default="varied", help="varied | shared_prefix")
     p.add_argument("--limit", type=int, help="use only the first N prompts of the set")
+    p.add_argument("--repeat", type=int, default=1, help="send each prompt N times per level")
     p.add_argument("--no-ignore-eos", dest="ignore_eos", action="store_false",
                    help="let the model stop early (output lengths then vary per backend)")
     p.add_argument("--no-cache-bust", dest="cache_bust", action="store_false",
@@ -293,7 +303,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 async def main_async(args: argparse.Namespace) -> dict:
-    prompts = load_prompts(args.prompts, args.prompt_set, args.limit)
+    prompts = load_prompts(args.prompts, args.prompt_set, args.limit, args.repeat)
     levels = [int(c) for c in args.concurrency.split(",")]
 
     if args.warmup:
@@ -316,7 +326,7 @@ async def main_async(args: argparse.Namespace) -> dict:
         runs.append(level)
 
     return {
-        "experiment": "load",
+        "experiment": args.experiment,
         "label": args.label,
         "created": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "base_url": args.base_url,
