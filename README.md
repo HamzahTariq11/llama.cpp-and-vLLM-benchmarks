@@ -257,7 +257,3 @@ results/             raw JSON from every run (the source of every number above)
 docs/                charts generated from results/
 tests/               pytest suite (parsers, stats, charts, notebook validity); no model or server needed
 ```
-
-## License
-
-[MIT](LICENSE)
