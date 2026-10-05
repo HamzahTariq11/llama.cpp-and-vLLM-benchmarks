@@ -13,8 +13,11 @@ Usage:
 import argparse
 import json
 import platform
+import queue
 import re
 import subprocess
+import threading
+import time
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -60,17 +63,36 @@ def parse_kv_size(text: str) -> float:
     return float(match.group(1))
 
 
-def kv_cache_mib(gguf: Path, ctx: int, flags: dict) -> float:
-    """Start llama-server just long enough to read the KV-cache size it allocates."""
+def kv_cache_mib(gguf: Path, ctx: int, flags: dict, timeout_s: float = 60) -> float:
+    """Start llama-server just long enough to read the KV-cache size it allocates.
+
+    The size line is only logged at verbosity 4 (`-lv 4`). Lines are read on a background
+    thread so a missing line fails after `timeout_s` instead of blocking forever.
+    """
     cmd = [str(BIN_DIR / "llama-server.exe"), "-m", str(gguf), "-c", str(ctx), "--port", "8099",
-           "-fa", flags["fa"], "-ctk", flags["ctk"], "-ctv", flags["ctv"]]
+           "-lv", "4", "-fa", flags["fa"], "-ctk", flags["ctk"], "-ctv", flags["ctv"]]
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                             text=True, encoding="utf-8", errors="replace")
-    try:
+    lines: queue.Queue[str | None] = queue.Queue()
+
+    def pump() -> None:
         for line in proc.stdout:
+            lines.put(line)
+        lines.put(None)  # EOF
+
+    threading.Thread(target=pump, daemon=True).start()
+    deadline = time.monotonic() + timeout_s
+    try:
+        while (remaining := deadline - time.monotonic()) > 0:
+            try:
+                line = lines.get(timeout=remaining)
+            except queue.Empty:
+                break
+            if line is None:
+                raise RuntimeError("llama-server exited before reporting its KV-cache size")
             if KV_SIZE_RE.search(line):
                 return parse_kv_size(line)
-        raise RuntimeError("llama-server exited before reporting its KV-cache size")
+        raise RuntimeError(f"No KV-cache size from llama-server within {timeout_s:.0f} s")
     finally:
         proc.kill()
         proc.wait()
