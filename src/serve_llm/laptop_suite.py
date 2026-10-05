@@ -4,11 +4,11 @@ Before the first step and after every step, a short reference measurement (llama
 Q5_K_M, 4 threads) is appended to results/reference_checks.json. If the machine's state
 changes mid-session (background load, thermals, power mode), it shows up there.
 
-Steps: quant, threads, attention, baseline, parallel
+Steps: quant, threads, baseline, parallel1, parallel4, attention
 
 Usage:
     uv run python -m serve_llm.laptop_suite                  # everything (~1.5 h)
-    uv run python -m serve_llm.laptop_suite --steps parallel
+    uv run python -m serve_llm.laptop_suite --steps parallel1,parallel4
 """
 
 import argparse
@@ -116,15 +116,24 @@ def step_baseline() -> None:
                   _server_config(parallel_slots=4, flags="defaults"), [])
 
 
-def step_parallel() -> None:
-    for slots in (1, 4):
-        with llama_server(f"parallel{slots}", ["--parallel", str(slots)]):
-            load_test(f"llamacpp-q5_k_m-parallel{slots}", "load_parallel_slots",
-                      _server_config(parallel_slots=slots), ["--limit", "16"])
+def _parallel(slots: int) -> None:
+    with llama_server(f"parallel{slots}", ["--parallel", str(slots)]):
+        load_test(f"llamacpp-q5_k_m-parallel{slots}", "load_parallel_slots",
+                  _server_config(parallel_slots=slots), ["--limit", "16"])
 
 
-STEPS = {"quant": step_quant, "threads": step_threads, "attention": step_attention,
-         "baseline": step_baseline, "parallel": step_parallel}
+def step_parallel1() -> None:
+    _parallel(1)
+
+
+def step_parallel4() -> None:
+    _parallel(4)
+
+
+# Order matters: attention is measured after the load tests so every attention config
+# runs on an already-warm (thermally steady) machine.
+STEPS = {"quant": step_quant, "threads": step_threads, "baseline": step_baseline,
+         "parallel1": step_parallel1, "parallel4": step_parallel4, "attention": step_attention}
 
 
 def main() -> None:
